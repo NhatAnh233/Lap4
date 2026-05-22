@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caro 4x3 Pro</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            color: #2c3e50;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        h1 { margin-bottom: 5px; font-size: 2.2rem; color: #2c3e50; }
+        
+        .controls {
+            margin: 15px 0 25px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        label { font-weight: 600; font-size: 14px; }
+        select {
+            padding: 8px 15px;
+            border-radius: 8px;
+            border: 2px solid #bdc3c7;
+            font-size: 15px;
+            outline: none;
+            cursor: pointer;
+            background: white;
+        }
+        .status {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            height: 30px;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 90px);
+            grid-template-rows: repeat(4, 90px);
+            gap: 8px;
+            background-color: #7f8c8d;
+            padding: 8px;
+            border-radius: 12px;
+            margin: 0 auto;
+            width: max-content;
+        }
+        .cell {
+            background-color: #fff;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 50px;
+            font-weight: 900;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            user-select: none;
+        }
+        .cell:hover { transform: translateY(-2px); background-color: #f1f2f6; }
+        .cell.x { color: #3498db; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .cell.o { color: #e74c3c; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .cell.win { background-color: #f1c40f !important; color: white !important; transform: scale(1.05); }
+
+        .btn-restart {
+            margin-top: 30px;
+            padding: 12px 35px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            background-color: #2ecc71;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.2s;
+            box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+        }
+        .btn-restart:hover { background-color: #27ae60; transform: translateY(-2px); }
+
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.5); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Caro 4x3</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="gameMode">Chế độ chơi:</label>
+                <select id="gameMode" onchange="initGame()">
+                    <option value="pvc_x">Bạn (X) vs AI (O)</option>
+                    <option value="pvc_o">AI (X) vs Bạn (O)</option>
+                    <option value="pvp">Người vs Người</option>
+                </select>
+            </div>
+            <div class="control-group" id="difficultyGroup">
+                <label for="difficultyLevel">Độ Khó AI:</label>
+                <select id="difficultyLevel">
+                    <option value="1">Dễ (Ngáo)</option>
+                    <option value="3">Trung bình</option>
+                    <option value="6" selected>Khó (Bất bại)</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="status" id="statusText">Lượt của bạn (X)</div>
+        <div class="board" id="board"></div>
+        <button class="btn-restart" onclick="initGame()">CHƠI LẠI</button>
+    </div>
+
+    <script>
+        const ROWS = 4, COLS = 3;
+        let boardArr = [], gameActive = true;
+        let currentTurn = 'X'; // Quản lý lượt đi toàn cục ('X' hoặc 'O')
+
+        const boardEl = document.getElementById('board');
+        const statusEl = document.getElementById('statusText');
+        const diffEl = document.getElementById('difficultyLevel');
+        const modeEl = document.getElementById('gameMode');
+        const diffGroup = document.getElementById('difficultyGroup');
+
+        async function initGame() {
+            boardArr = Array.from({ length: ROWS }, () => Array(COLS).fill(' '));
+            boardEl.innerHTML = '';
+            gameActive = true;
+            currentTurn = 'X'; // Mặc định ván mới thì X luôn đi trước
+
+            const mode = modeEl.value;
+
+            // Ẩn/Hiện bộ chọn độ khó dựa theo chế độ chơi công bằng
+            if (mode === 'pvp') {
+                diffGroup.style.display = 'none';
+            } else {
+                diffGroup.style.display = 'flex';
+            }
+
+            // Xây dựng lại lưới giao diện bàn cờ
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.r = r; cell.dataset.c = c;
+                    cell.addEventListener('click', handleClick);
+                    boardEl.appendChild(cell);
+                }
+            }
+
+            // Cập nhật dòng trạng thái ban đầu dựa trên chế độ
+            if (mode === 'pvp') {
+                updateStatusText("Lượt của X (Người 1)", "#2c3e50");
+            } else if (mode === 'pvc_x') {
+                updateStatusText("Lượt của bạn (X)", "#2c3e50");
+            } else if (mode === 'pvc_o') {
+                // Chế độ AI đi trước bằng quân X
+                updateStatusText("AI đang đánh nước đầu...", "#95a5a6");
+                gameActive = false;
+                await triggerAiInitialMove();
+            }
+        }
+
+        function updateStatusText(text, color) {
+            statusEl.textContent = text;
+            statusEl.style.color = color;
+        }
+
+        async function handleClick(e) {
+            if (!gameActive) return;
+            const r = parseInt(e.target.dataset.r);
+            const c = parseInt(e.target.dataset.c);
+
+            if (boardArr[r][c] !== ' ') return;
+
+            const mode = modeEl.value;
+
+            if (mode === 'pvp') {
+                // Logic Người đấu với Người
+                makeMove(r, c, currentTurn);
+                if (checkGameOver(currentTurn)) return;
+                
+                currentTurn = (currentTurn === 'X') ? 'O' : 'X';
+                updateStatusText(`Lượt của ${currentTurn} (${currentTurn === 'X' ? 'Người 1' : 'Người 2'})`, "#2c3e50");
+            } 
+            else {
+                // Logic đấu với Máy (pvc_x hoặc pvc_o)
+                const playerSymbol = (mode === 'pvc_x') ? 'X' : 'O';
+                makeMove(r, c, playerSymbol);
+                if (checkGameOver(playerSymbol)) return;
+
+                // Khóa bàn cờ và nhường lượt cho AI tính toán
+                gameActive = false;
+                updateStatusText("AI đang nghĩ...", "#95a5a6");
+
+                await triggerAiMove();
+            }
+        }
+
+        // Hàm gọi AI bình thường theo trạng thái bàn cờ
+        async function triggerAiMove() {
+            try {
+                const res = await fetch('http://127.0.0.1:5000/api/get_move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        board: boardArr, 
+                        difficulty: diffEl.value,
+                        mode: modeEl.value 
+                    })
+                });
+                const aiMove = await res.json();
+
+                if (aiMove.row !== -1 && aiMove.col !== -1) {
+                    const aiSymbol = (modeEl.value === 'pvc_x') ? 'O' : 'X';
+                    makeMove(aiMove.row, aiMove.col, aiSymbol);
+                    
+                    if (!checkGameOver(aiSymbol)) {
+                        gameActive = true; 
+                        const playerSymbol = (modeEl.value === 'pvc_x') ? 'X' : 'O';
+                        updateStatusText(`Lượt của bạn (${playerSymbol})`, "#2c3e50");
+                    }
+                }
+            } catch (err) {
+                updateStatusText("Lỗi kết nối Backend!", "red");
+            }
+        }
+
+        // Hàm lấy nước đi đầu tối ưu của AI khi AI được đi trước (Tránh đơ Minimax)
+        async function triggerAiInitialMove() {
+            try {
+                const res = await fetch('http://127.0.0.1:5000/api/get_initial_move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const aiMove = await res.json();
+
+                if (aiMove.row !== -1 && aiMove.col !== -1) {
+                    makeMove(aiMove.row, aiMove.col, 'X'); // AI đi trước luôn là X
+                    gameActive = true;
+                    updateStatusText("Đến lượt bạn (O)", "#2c3e50");
+                }
+            } catch (err) {
+                updateStatusText("Lỗi kết nối Backend!", "red");
+            }
+        }
+
+        function makeMove(r, c, player) {
+            boardArr[r][c] = player;
+            const cell = boardEl.children[r * COLS + c];
+            cell.textContent = player;
+            cell.classList.add(player.toLowerCase());
+        }
+
+        function getWinLine(b, player) {
+            for (let i = 0; i < ROWS; i++) {
+                for (let j = 0; j < COLS; j++) {
+                    if (b[i][j] === player) {
+                        if (j <= COLS - 3 && b[i][j+1] === player && b[i][j+2] === player) return [[i,j], [i,j+1], [i,j+2]];
+                        if (i <= ROWS - 3 && b[i+1][j] === player && b[i+2][j] === player) return [[i,j], [i+1][j], [i+2][j]];
+                        if (i <= ROWS - 3 && j <= COLS - 3 && b[i+1][j+1] === player && b[i+2][j+2] === player) return [[i,j], [i+1][j+1], [i+2][j+2]];
+                        if (i <= ROWS - 3 && j >= 2 && b[i+1][j-1] === player && b[i+2][j-2] === player) return [[i,j], [i+1][j-1], [i+2][j-2]];
+                    }
+                }
+            }
+            return null;
+        }
+
+        function checkGameOver(lastPlayer) {
+            const winLine = getWinLine(boardArr, lastPlayer);
+            const mode = modeEl.value;
+
+            if (winLine) {
+                winLine.forEach(([r, c]) => boardEl.children[r * COLS + c].classList.add('win'));
+                
+                if (mode === 'pvp') {
+                    updateStatusText(`🎉 Người chơi ${lastPlayer} chiến thắng!`, "#27ae60");
+                } else {
+                    const playerSymbol = (mode === 'pvc_x') ? 'X' : 'O';
+                    if (lastPlayer === playerSymbol) {
+                        updateStatusText("🎉 Bạn đã chiến thắng!", "#27ae60");
+                    } else {
+                        updateStatusText("🤖 AI đã chiến thắng!", "#c0392b");
+                    }
+                }
+                gameActive = false;
+                return true;
+            }
+            
+            if (!boardArr.flat().includes(' ')) {
+                updateStatusText("🤝 Hòa rồi!", "#f39c12");
+                gameActive = false;
+                return true;
+            }
+            return false;
+        }
+
+        window.onload = initGame;
+    </script>
+</body>
+</html>
